@@ -8,6 +8,7 @@ import re
 
 logFile = None
 writeable = False
+bootmenu = False
 
 username = "ADMIN"
 passwd = "ADMIN"
@@ -60,6 +61,7 @@ def OnReceiveSerialData(message):
     global serial_number
     global login_f
     global next_command
+    global bootmenu
 
     #print(message)
     if b'\x1b[100B\r\x1b[K\r--More--\x1b[K\x1b\r                \r\x1b[K' in message:
@@ -73,9 +75,12 @@ def OnReceiveSerialData(message):
         next_command = True
     if " Supermicro Switch" in message:
         login_f = True
+    if "Active  CMM1(2)" in message:
+        serialPort.serialport.write(" ".encode('utf-8'))
+        bootmenu = True
 
-    print(str_message)
-    if writeable and str_message != "SMIS#" and str_message != "":
+    #print(str_message)
+    if  of and writeable and str_message != "SMIS#" and str_message != "":
         of.write(str_message + "\n")
     m = re.findall(r"Switch Serial\s+Number\s+\:\s?(\w+)", str_message)
     if m:
@@ -101,17 +106,17 @@ def login(username, passwd):
     serialPort.Send("")
     time.sleep(1.0)
     username += "\r"
-    serialPort.serialport.write(username.encode("utf-8"))
+    serialPort.serialport.write(username.encode("utf-8",errors='ignore'))
     time.sleep(1.0)
     passwd += "\r"
-    serialPort.serialport.write(passwd.encode("utf-8"))
+    serialPort.serialport.write(passwd.encode("utf-8",errors='ignore'))
     time.sleep(1.0)
     #data = serialPort.serialport.read(serialPort.serialport.inWaiting())
     #print(data)
 
 def logout():
     str = "exit\r"
-    serialPort.serialport.write(str.encode("utf-8"))
+    serialPort.serialport.write(str.encode("utf-8",errors='ignore'))
     time.sleep(1.0)
 
 def writeCommand(command):
@@ -137,8 +142,9 @@ def SetNetwork(IP):
 def bootmenue():
     while True:
         time.sleep(1.0)
+        print('bootmenu')
         if serialPort.serialport.in_waiting > 0:
-            message = serialPort.serialport.read(serialPort.serialport.in_waiting).decode("utf-8")
+            message = serialPort.serialport.read(serialPort.serialport.in_waiting).decode("utf-8",errors='ignore')
             message = message.rstrip()
             print(message)
             if " MBM-XEM-002 Boot Menu " in message:
@@ -146,9 +152,10 @@ def bootmenue():
                 break
 OpenCommand()
 if serialPort.IsOpen():
-    bootmenue()
     serialPort.RegisterReceiveCallback(OnReceiveSerialData)
-    #time.sleep(1.0)
+    while not bootmenu:
+        pass
+    bootmenu = False
     SetNetwork(IP)
     serialPort.Send("")
 
@@ -160,45 +167,44 @@ if serialPort.IsOpen():
     of.write(time.strftime("%m-%d-%Y %H:%M:%S", time.gmtime()))
     serialPort.Send("")
     for command in commands:
+
         command = re.sub(r'\#.*$','',command).rstrip()
         if command == '':
             continue
         while not next_command:
             serialPort.Send("")
             time.sleep(1.0)
-        print(command)
+        #print(command)
         command = command.rstrip()
         serialPort.Send(command)
         #for c in command:
-        #   serialPort.serialport.write(c.encode("utf-8"))
+        #   serialPort.serialport.write(c.encode("utf-8",errors='ignore'))
         of.write("\n")
         next_command = False
-    #serialPort.serialport.write("\r".encode("utf-8"))
+    #serialPort.serialport.write("\r".encode("utf-8",errors='ignore'))
     #input()
     #while serialPort.serialport.inWaiting() > 0:
 #   pass
+    writeable = False
     while not next_command:
         pass
-    serialPort.Send("reload")
-    time.sleep(2.0)
-    print("y")
-    serialPort.serialport.write("y".encode('utf-8'))
-    time.sleep(1.0)
-    print("y")
-    serialPort.serialport.write("y".encode('utf-8'))
-    time.sleep(1.0)
-    print("y")
-    serialPort.serialport.write("y\n".encode('utf-8'))
-    print("before fun")
-    bootmenue()
-    serialPort.serialport.write("r".encode('utf-8'))
+    of.close()
+    #serialPort.Close()
+    file_name = serial_number + '.log'
+    #print("mv command_log.txt " + file_name)
+    os.system("mv command_log.txt " + file_name)
+    bootmenu = False
+    serialPort.serialport.write("reload\r".encode('utf-8'))
+    #serialPort.Send("reload")
+    #serialPort.serialport.write("y".encode('utf-8'))
+    serialPort.Send_raw("y")
+    while not bootmenu:
+        pass
+    SetNetwork('192.168.100.102')
+    serialPort.Send("")
     #logout()
     #reset()
     #thread.exit()
 else:
     print("Not sent - COM port is closed\r\n")
-of.close()
-#serialPort.Close()
-file_name = serial_number + '.log'
-#print("mv command_log.txt " + file_name)
-os.system("mv command_log.txt " + file_name)
+

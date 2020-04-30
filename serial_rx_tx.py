@@ -45,7 +45,7 @@ class SerialPort:
             try:
                 if self.isopen:
                     self.receivedMessage = self.serialport.readline()
-                    #print(self.receivedMessage)
+                    print(self.receivedMessage)
                     #input()
                     #if self.receivedMessage != "":
                         #print(self.receivedMessage)
@@ -64,9 +64,7 @@ class SerialPort:
             self.serialport.port = portname
             self.serialport.baudrate = baudrate
             try:
-
                 self.serialport.open()
-
                 self.isopen = True
 
             except:
@@ -82,8 +80,6 @@ class SerialPort:
 
                 print("Close error closing COM port: ", sys.exc_info()[0])
 
-
-
     def Send(self,message):
 
         if self.isopen:
@@ -93,21 +89,16 @@ class SerialPort:
                 newmessage += '\r\n'
                 self.serialport.write(newmessage.encode('utf-8'))
             except:
-
                 print("Error sending message: ", sys.exc_info()[0] )
 
             else:
-
                 return True
-
         else:
             return False
     def Send_raw(self,message):
         if self.isopen:
             try:
-                # Ensure that the end of the message has both \r and \n, not just one or the other
-                newmessage = message
-                self.serialport.write(newmessage.encode('utf-8'))
+                self.serialport.write(message.encode('utf-8'))
             except:
                 print("Error sending raw message: ", sys.exc_info()[0] )
             else:
