@@ -5,6 +5,7 @@ import os
 import subprocess
 import _thread
 import re
+from datetime import datetime
 
 logFile = None
 writeable = False
@@ -28,25 +29,33 @@ commands = f.readlines()
 
 while True:
     if commands[0].startswith("User Name:"):
-        username = commands[0][10:].rstrip()
+        ary = commands[0].split(":")
+        if len(ary) == 2:
+            username = ary[1].rstrip()
         #print(username)
         commands.pop(0)
     elif commands[0].startswith("Password:"):
-        passwd = commands[0][9:].rstrip()
+        ary = commands[0].split(":")
+        if len(ary) == 2:
+            passwd = ary[1].rstrip()
         #print(passwd)
         commands.pop(0)
     elif commands[0].startswith("COM Port:"):
-        comport = commands[0][9:].rstrip()
+        ary = commands[0].split(":")
+        if len(ary) == 2:
+            comport = ary[1].rstrip()
         #print(comport)
         commands.pop(0)
     elif commands[0].startswith("Baud Rate:"):
-        baudrate = commands[0][10:].rstrip()
+        ary = commands[0].split(":")
+        if len(ary) == 2:
+            baudrate = ary[1].rstrip()
         #print(baudrate)
         commands.pop(0)
-    elif commands[0].startswith("IP:"):
-        IP = commands[0][3:].rstrip()
-        #print(baudrate)
-        commands.pop(0)
+    # elif commands[0].startswith("IP:"):
+    #     IP = commands[0][3:].rstrip()
+    #     #print(baudrate)
+    #     commands.pop(0)
     elif commands[0].startswith("*****Commands Start From Here*****"):
         commands.pop(0)
         break
@@ -66,19 +75,21 @@ def OnReceiveSerialData(message):
     #print(message)
     if b'\x1b[100B\r\x1b[K\r--More--\x1b[K\x1b\r                \r\x1b[K' in message:
         message = message[44:]
+        serialPort.serialport.write(" ".encode('utf-8'))
     if message[:5] == b'\x1b[27m':
         message =  message[6:]
-    str_message = message.decode("utf-8").rstrip().lstrip()
+    str_message = message.decode("utf-8", errors='ignore').rstrip().lstrip()
     #str_message = str_message.lstrip(chr(27))
+    print(str_message)
     if str_message.endswith("SMIS#") and login_f:
         writeable = True
         next_command = True
-    if " Supermicro Switch" in message:
+    if "login:" in str_message:
         login_f = True
-    if "Active  CMM1(2)" in message:
-        serialPort.serialport.write(" ".encode('utf-8'))
-        bootmenu = True
 
+    # if "Active  CMM1(2)" in message:
+    #     serialPort.serialport.write(" ".encode('utf-8'))
+    #     bootmenu = True
     #print(str_message)
     if  of and writeable and str_message != "SMIS#" and str_message != "":
         of.write(str_message + "\n")
@@ -97,19 +108,16 @@ def OpenCommand():
     global baudrate
     #comport = "COM5"
     #baudrate = "9600"
+    print("Connecting to {}".format(comport))
     serialPort.Open(comport,baudrate)
     print("COM Port Opened\r\n")
 
 def login(username, passwd):
-    serialPort.Send("")
-    time.sleep(1.0)
-    serialPort.Send("")
-    time.sleep(1.0)
     username += "\r"
-    serialPort.serialport.write(username.encode("utf-8",errors='ignore'))
+    serialPort.serialport.write(username.encode("utf-8"))
     time.sleep(1.0)
     passwd += "\r"
-    serialPort.serialport.write(passwd.encode("utf-8",errors='ignore'))
+    serialPort.serialport.write(passwd.encode("utf-8"))
     time.sleep(1.0)
     #data = serialPort.serialport.read(serialPort.serialport.inWaiting())
     #print(data)
@@ -153,21 +161,21 @@ def bootmenue():
 OpenCommand()
 if serialPort.IsOpen():
     serialPort.RegisterReceiveCallback(OnReceiveSerialData)
-    while not bootmenu:
-        pass
-    bootmenu = False
-    SetNetwork(IP)
+    # while not bootmenu:
+    #     pass
+    # bootmenu = False
+    # SetNetwork(IP)
     serialPort.Send("")
-
+    time.sleep(2.0)
     while not login_f:
-        time.sleep(2.0)
+        time.sleep(10.0)
+        serialPort.Send("")
         #print('login',login_f)
-    serialPort.Send("")
+    #serialPort.Send("")
     login(username, passwd)
-    of.write(time.strftime("%m-%d-%Y %H:%M:%S", time.gmtime()))
+    of.write(datetime.now().strftime("%m-%d-%Y %H:%M:%S") + "\n")
     serialPort.Send("")
     for command in commands:
-
         command = re.sub(r'\#.*$','',command).rstrip()
         if command == '':
             continue
@@ -176,32 +184,50 @@ if serialPort.IsOpen():
             time.sleep(1.0)
         #print(command)
         command = command.rstrip()
+        next_command = False
         serialPort.Send(command)
+        time.sleep(0.5)
         #for c in command:
         #   serialPort.serialport.write(c.encode("utf-8",errors='ignore'))
         of.write("\n")
-        next_command = False
     #serialPort.serialport.write("\r".encode("utf-8",errors='ignore'))
     #input()
-    #while serialPort.serialport.inWaiting() > 0:
-#   pass
-    writeable = False
+    # while serialPort.serialport.inWaiting() > 0:
+    #     pass
+    # writeable = False
+    serialPort.Send("")
     while not next_command:
-        pass
+        time.sleep(2.0) #wait for the last command to finish
+        serialPort.Send("")
+        # print("in loop", next_command)
+    time.sleep(2.0)
     of.close()
+    serialPort.serialport.write("exit".encode('utf-8'))
     #serialPort.Close()
     file_name = serial_number + '.log'
-    #print("mv command_log.txt " + file_name)
-    os.system("mv command_log.txt " + file_name)
-    bootmenu = False
-    serialPort.serialport.write("reload\r".encode('utf-8'))
+
+    if os.name == 'posix':
+        log_dir = os.getcwd() + '/log'
+    else:
+        log_dir = os.getcwd() + "\\log"
+    if not os.path.isdir(log_dir):
+        os.mkdir(log_dir)
+
+    if os.name == 'posix':
+        file_name =log_dir + '/' + file_name
+        os.system("mv command_log.txt " + file_name)
+    else:
+        file_name =log_dir + "\\" + file_name
+        os.system("copy command_log.txt " + file_name)
+    # bootmenu = False
+    # serialPort.serialport.write("reload\r".encode('utf-8'))
     #serialPort.Send("reload")
     #serialPort.serialport.write("y".encode('utf-8'))
-    serialPort.Send_raw("y")
-    while not bootmenu:
-        pass
-    SetNetwork('192.168.100.102')
-    serialPort.Send("")
+    # serialPort.Send_raw("y")
+    # while not bootmenu:
+    #     pass
+    #SetNetwork('192.168.100.102')
+    # serialPort.Send("")
     #logout()
     #reset()
     #thread.exit()
