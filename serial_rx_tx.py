@@ -42,18 +42,21 @@ class SerialPort:
 
     def SerialReadlineThread(self):
         while True:
-            try:
-                if self.isopen:
+            #try:
+            if self.isopen:
+                if self.serialport.in_waiting > 0:
+                    self.receivedMessage = None
                     self.receivedMessage = self.serialport.readline()
-                    print(self.receivedMessage)
-                    #input()
-                    #if self.receivedMessage != "":
-                        #print(self.receivedMessage)
-                        #if self.receivedMessage.startswith('\rSMIS# '):
-                        #   write_able = True
-                    self.ReceiveCallback(self.receivedMessage)
-            except Exception as e:
-                print("Error reading COM port: ", e)
+                #print(self.receivedMessage)
+                #input()
+                    if self.receivedMessage:
+                    #print(self.receivedMessage)
+                    #if self.receivedMessage.startswith('\rSMIS# '):
+                    #   write_able = True
+
+                        self.ReceiveCallback(self.receivedMessage)
+            # except Exception as e:
+            #     print("Error reading COM port: ", str(e))
 
     def IsOpen(self):
         return self.isopen
@@ -63,13 +66,13 @@ class SerialPort:
             # serialPort = 'portname', baudrate, bytesize = 8, parity = 'N', stopbits = 1, timeout = None, xonxoff = 0, rtscts = 0)
             self.serialport.port = portname
             self.serialport.baudrate = baudrate
+
             try:
                 self.serialport.open()
                 self.isopen = True
 
             except:
-
-                print("Error opening COM port: ", sys.exc_info()[0])
+                print("Error opening COM port: ", sys.exc_info()[1])
 
     def Close(self):
         if self.isopen:
