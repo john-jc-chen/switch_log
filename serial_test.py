@@ -81,11 +81,15 @@ def OnReceiveSerialData(message):
     str_message = message.decode("utf-8", errors='ignore').rstrip().lstrip()
     #str_message = str_message.lstrip(chr(27))
     print(str_message)
-    if str_message.endswith("SMIS#") and login_f:
-        writeable = True
-        next_command = True
-    if "login:" in str_message:
+    if str_message.endswith("SMIS#"):
+        if login_f == True:
+            writeable = True
+            next_command = True
         login_f = True
+    # if "Incorrect Login/Password"in str_message:
+    #     login_f = False
+    # elif "login:" in str_message:
+    #     login_f = True
 
     # if "Active  CMM1(2)" in message:
     #     serialPort.serialport.write(" ".encode('utf-8'))
@@ -112,15 +116,28 @@ def OpenCommand():
     serialPort.Open(comport,baudrate)
     print("COM Port Opened\r\n")
 
-def login(username, passwd):
+def login(username, passwd,serialPort):
     username += "\r"
     serialPort.serialport.write(username.encode("utf-8"))
-    time.sleep(1.0)
+    time.sleep(0.5)
+    data = serialPort.serialport.readline().decode("utf-8", errors='ignore')
+    print(data)
     passwd += "\r"
     serialPort.serialport.write(passwd.encode("utf-8"))
     time.sleep(1.0)
-    #data = serialPort.serialport.read(serialPort.serialport.inWaiting())
-    #print(data)
+    data = serialPort.serialport.read(serialPort.serialport.in_waiting).decode("utf-8", errors='ignore')
+    print(data)
+    if "SMIS#" not in data:
+        passwd =  passwd.rstrip()
+        print("Failed to login with the password \"" + passwd + "\"\n Leave scrip!!!")
+        serialPort.Close()
+        try:
+            del serialPort
+            sys.exit()
+        except Exception as e:
+            print(str(e))
+
+
 
 def logout():
     str = "exit\r"
@@ -152,27 +169,36 @@ def bootmenue():
         time.sleep(1.0)
         print('bootmenu')
         if serialPort.serialport.in_waiting > 0:
-            message = serialPort.serialport.read(serialPort.serialport.in_waiting).decode("utf-8",errors='ignore')
+            message = serialPort.serialport.readline().decode("utf-8",errors='ignore')
             message = message.rstrip()
             print(message)
             if " MBM-XEM-002 Boot Menu " in message:
-                serialPort.serialport.write(" ".encode('utf-8'))
+                serialPort.serialport.write("".encode('utf-8'))
                 break
 OpenCommand()
 if serialPort.IsOpen():
-    serialPort.RegisterReceiveCallback(OnReceiveSerialData)
+    #bootmenue()
     # while not bootmenu:
     #     pass
     # bootmenu = False
     # SetNetwork(IP)
     serialPort.Send("")
-    time.sleep(2.0)
+    serialPort.Send("")
     while not login_f:
-        time.sleep(10.0)
-        serialPort.Send("")
-        #print('login',login_f)
-    #serialPort.Send("")
-    login(username, passwd)
+        message = serialPort.serialport.readline().decode("utf-8",errors='ignore')
+        print(message)
+        if "login:" in message:
+            login_f = True
+            login(username, passwd,serialPort)
+            break
+        elif "Supermicro Switch" in message:
+            serialPort.Send("")
+        elif "SMIS#"  in message:
+            login_f = True
+            break
+        time.sleep(0.1)
+
+    serialPort.RegisterReceiveCallback(OnReceiveSerialData)
     of.write(datetime.now().strftime("%m-%d-%Y %H:%M:%S") + "\n")
     serialPort.Send("")
     for command in commands:
